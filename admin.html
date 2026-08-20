@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard — CyberSecure Enterprise</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<style>
+  :root{
+    --bg: #0E1412;
+    --panel: #151D1A;
+    --panel-raised: #1B2521;
+    --border: #263831;
+    --text: #DCE6E1;
+    --text-dim: #8AA098;
+    --safe: #3ED598;
+    --warn: #E8A93D;
+    --danger: #E5544D;
+    --critical: #FF4444;
+    --accent: #4FD1C5;
+    --mono: 'IBM Plex Mono', monospace;
+    --display: 'Space Grotesk', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family: var(--display);
+    min-height:100vh;
+  }
+  body::before{
+    content:"";
+    position:fixed; inset:0; pointer-events:none; z-index:0;
+    background-image: repeating-linear-gradient(0deg, rgba(79,209,197,0.025) 0px, rgba(79,209,197,0.025) 1px, transparent 1px, transparent 3px);
+  }
+  .shell{ position:relative; z-index:1; max-width:1400px; margin:0 auto; padding:28px 24px 80px;}
+
+  header{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    border-bottom:1px solid var(--border); padding-bottom:18px; margin-bottom:28px;
+    flex-wrap:wrap; gap:12px;
+  }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand-mark{
+    width:38px; height:38px; border:1.5px solid var(--accent); border-radius:8px;
+    display:flex; align-items:center; justify-content:center; position:relative;
+    flex-shrink:0;
+  }
+  .brand-mark span{
+    width:8px; height:8px; border-radius:50%; background:var(--danger);
+    box-shadow:0 0 8px var(--danger);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+  h1{ font-size:1.28rem; font-weight:700; margin:0; letter-spacing:-0.01em;}
+  .brand-sub{ font-family:var(--mono); font-size:.72rem; color:var(--text-dim); letter-spacing:.08em; text-transform:uppercase; margin-top:2px;}
+  .status-banner{ display:flex; gap:20px; font-family:var(--mono); font-size:.75rem; flex-wrap:wrap;}
+  .status-item{ display:flex; align-items:center; gap:8px;}
+  .status-dot{ width:8px; height:8px; border-radius:50%; }
+  .status-dot.critical{ background:var(--critical); }
+  .status-dot.high{ background:var(--danger); }
+  .status-dot.normal{ background:var(--safe); }
+
+  .tabs{ display:flex; gap:6px; margin-bottom:22px; flex-wrap:wrap;}
+  .tab{
+    font-family:var(--mono); font-size:.78rem; letter-spacing:.03em;
+    background:var(--panel); border:1px solid var(--border); color:var(--text-dim);
+    padding:9px 16px; border-radius:6px; cursor:pointer; transition:all .15s ease;
+  }
+  .tab:hover{ color:var(--text); border-color:var(--accent); }
+  .tab.active{ background:var(--panel-raised); color:var(--accent); border-color:var(--accent); }
+
+  .panel{ display:none; }
+  .panel.active{ display:block; animation: fade .25s ease; }
+  @keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+
+  .stats-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-bottom:22px;}
+  .stat{ background:var(--panel-raised); border:1px solid var(--border); border-radius:8px; padding:16px;}
+  .stat .label{ font-family:var(--mono); font-size:.68rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:.06em;}
+  .stat .value{ font-family:var(--mono); font-size:2rem; font-weight:600; margin-top:6px;}
+  .stat .detail{ font-family:var(--mono); font-size:.7rem; color:var(--text-dim); margin-top:4px;}
+
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:10px;
+    padding:22px; margin-bottom:18px;
+  }
+  .card h2{ font-size:1rem; margin:0 0 12px; font-weight:600; display:flex; justify-content:space-between; align-items:center;}
+  .card .subtitle{ font-family:var(--mono); font-size:.76rem; color:var(--text-dim); margin-bottom:14px;}
+
+  .table-responsive{ overflow-x:auto; }
+  table{
+    width:100%; border-collapse:collapse; font-size:.85rem; font-family:var(--mono);
+  }
+  table th{
+    background:var(--panel-raised); padding:10px; text-align:left;
+    font-weight:600; color:var(--text-dim); text-transform:uppercase;
+    font-size:.7rem; letter-spacing:.05em; border-bottom:1px solid var(--border);
+  }
+  table td{
+    padding:10px; border-bottom:1px solid var(--border);
+  }
+  table tr:hover{ background:var(--panel-raised); }
+  .badge{
+    display:inline-block; padding:4px 8px; border-radius:4px; font-size:.7rem;
+    font-weight:600; text-transform:uppercase; letter-spacing:.03em;
+  }
+  .badge.critical{ background:rgba(255,68,68,.2); color:var(--critical); }
+  .badge.high{ background:rgba(229,84,77,.2); color:var(--danger); }
+  .badge.medium{ background:rgba(232,169,61,.2); color:var(--warn); }
+  .badge.low{ background:rgba(62,213,152,.2); color:var(--safe); }
+  .badge.success{ background:rgba(62,213,152,.2); color:var(--safe); }
+  .badge.danger{ background:rgba(229,84,77,.2); color:var(--danger); }
+  .badge.warning{ background:rgba(232,169,61,.2); color:var(--warn); }
+
+  .action-btn{
+    font-family:var(--mono); font-size:.75rem; padding:6px 10px;
+    background:var(--panel-raised); border:1px solid var(--border);
+    color:var(--text-dim); border-radius:4px; cursor:pointer;
+    transition:all .15s ease;
+  }
+  .action-btn:hover{ border-color:var(--accent); color:var(--accent); }
+  .action-btn.danger:hover{ border-color:var(--danger); color:var(--danger); }
+
+  .alert{ padding:12px 14px; border-radius:6px; font-size:.85rem; margin-bottom:12px; }
+  .alert.error{ background:rgba(229,84,77,.15); border:1px solid var(--danger); color:var(--danger); }
+  .alert.success{ background:rgba(62,213,152,.15); border:1px solid var(--safe); color:var(--safe); }
+  .alert.warning{ background:rgba(232,169,61,.15); border:1px solid var(--warn); color:var(--warn); }
+  .alert.critical{ background:rgba(255,68,68,.15); border:1px solid var(--critical); color:var(--critical); }
+
+  .threat-item{
+    background:var(--panel-raised); border-left:3px solid var(--danger);
+    padding:12px 14px; border-radius:4px; margin-bottom:10px;
+  }
+  .threat-item.critical{ border-left-color:var(--critical); background:rgba(255,68,68,.1); }
+  .threat-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
+  .threat-type{ font-family:var(--mono); font-size:.75rem; font-weight:600; text-transform:uppercase; }
+  .threat-time{ font-family:var(--mono); font-size:.7rem; color:var(--text-dim); }
+  .threat-desc{ font-size:.82rem; }
+  .threat-detail{ font-family:var(--mono); font-size:.75rem; color:var(--text-dim); margin-top:6px; }
+
+  .user-row{ display:flex; justify-content:space-between; align-items:center; padding:12px; background:var(--panel-raised); border-radius:4px; margin-bottom:8px;}
+  .user-info{ flex:1; }
+  .user-email{ font-weight:600; }
+  .user-meta{ font-family:var(--mono); font-size:.75rem; color:var(--text-dim); margin-top:4px; }
+  .user-actions{ display:flex; gap:8px; }
+
+  footer{ margin-top:40px; font-family:var(--mono); font-size:.7rem; color:var(--text-dim); text-align:center; opacity:.7;}
+  code{ background:var(--panel-raised); padding:1px 6px; border-radius:4px; font-size:.85em;}
+
+  .pulse-red{ animation: pulse-red 1.5s ease-in-out infinite; }
+  @keyframes pulse-red{ 0%,100%{opacity:1;} 50%{opacity:.6;} }
+
+  @media (max-width:768px){
+    .shell{padding:20px 16px 60px;}
+    table{font-size:.75rem;}
+    .stats-grid{ grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header>
+    <div class="brand">
+      <div class="brand-mark"><span></span></div>
+      <div>
+        <h1>CyberSecure Enterprise</h1>
+        <div class="brand-sub">Admin Command Center v3.0</div>
+      </div>
+    </div>
+    <div class="status-banner">
+      <div class="status-item">
+        <div class="status-dot critical pulse-red" id="threatDot"></div>
+        <span>Threats: <b id="threatCount">0</b></span>
+      </div>
+      <div class="status-item">
+        <div class="status-dot normal"></div>
+        <span>Sessions: <b id="sessionCount">0</b></span>
+      </div>
+      <div class="status-item">
+        <div class="status-dot normal"></div>
+        <span>Users: <b id="userCount">0</b></span>
+      </div>
+      <button id="logoutBtn" style="background:var(--panel-raised);border:1px solid var(--border);color:var(--danger);padding:8px 12px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:.75rem;">Logout</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-panel="overview">Overview</button>
+    <button class="tab" data-panel="threats">Threats</button>
+    <button class="tab" data-panel="users">Users</button>
+    <button class="tab" data-panel="sessions">Sessions</button>
+    <button class="tab" data-panel="ips">Malicious IPs</button>
+    <button class="tab" data-panel="logins">Login Audit</button>
+  </div>
+
+  <!-- OVERVIEW PANEL -->
+  <section class="panel active" id="panel-overview">
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat"><div class="label">Total Users</div><div class="value" id="stat-users">0</div></div>
+      <div class="stat"><div class="label">Active Sessions</div><div class="value" id="stat-sessions">0</div></div>
+      <div class="stat"><div class="label">Total Scans</div><div class="value" id="stat-scans">0</div></div>
+      <div class="stat"><div class="label">Failed Logins (24h)</div><div class="value" id="stat-failures">0</div></div>
+      <div class="stat"><div class="label">Critical Threats</div><div class="value" id="stat-critical">0</div><div class="detail" style="color:var(--critical);">⚠ Requires Action</div></div>
+      <div class="stat"><div class="label">Blocked IPs</div><div class="value" id="stat-blocked-ips">0</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Recent Threat Alerts<span style="font-size:.8rem;color:var(--text-dim);">Live Feed</span></h2>
+      <div id="recentThreats" style="max-height:300px;overflow-y:auto;">
+        <div style="text-align:center;color:var(--text-dim);padding:20px;">No threats detected</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Scan Statistics</h2>
+      <div class="table-responsive">
+        <table>
+          <thead><tr>
+            <th>Scan Type</th>
+            <th>Count</th>
+            <th>% of Total</th>
+          </tr></thead>
+          <tbody id="scanStats"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- THREATS PANEL -->
+  <section class="panel" id="panel-threats">
+    <div class="card">
+      <h2>Active Threat Alerts</h2>
+      <div class="subtitle">Real-time threat detection and monitoring</div>
+      <div id="threatsContainer">
+        <div style="text-align:center;color:var(--text-dim);padding:20px;">Loading threats...</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- USERS PANEL -->
+  <section class="panel" id="panel-users">
+    <div class="card">
+      <h2>User Management</h2>
+      <div class="subtitle">Control user access and account status</div>
+      <div id="usersContainer">
+        <div style="text-align:center;color:var(--text-dim);padding:20px;">Loading users...</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SESSIONS PANEL -->
+  <section class="panel" id="panel-sessions">
+    <div class="card">
+      <h2>Active Sessions<span style="font-size:.8rem;color:var(--text-dim);">Users Currently Online</span></h2>
+      <div id="sessionsContainer">
+        <div style="text-align:center;color:var(--text-dim);padding:20px;">Loading sessions...</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MALICIOUS IPS PANEL -->
+  <section class="panel" id="panel-ips">
+    <div class="card">
+      <h2>Malicious IP Blocklist</h2>
+      <div class="subtitle">Manage blocked IP addresses</div>
+      <div style="margin-bottom:16px;">
+        <input type="text" id="newIpInput" placeholder="Enter IP address to block" style="width:60%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:6px;font-family:var(--mono);font-size:.85rem;">
+        <button onclick="addMaliciousIp()" style="background:var(--accent);color:#0A1614;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-family:var(--mono);font-size:.8rem;font-weight:600;margin-left:8px;">Add IP</button>
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead><tr>
+            <th>IP Address</th>
+            <th>Threat Level</th>
+            <th>First Detected</th>
+            <th>Last Seen</th>
+            <th>Reason</th>
+            <th>Action</th>
+          </tr></thead>
+          <tbody id="ipsContainer"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOGINS PANEL -->
+  <section class="panel" id="panel-logins">
+    <div class="card">
+      <h2>Login Audit Trail</h2>
+      <div class="subtitle">Track all authentication attempts</div>
+      <div class="table-responsive">
+        <table>
+          <thead><tr>
+            <th>Timestamp</th>
+            <th>Email</th>
+            <th>IP Address</th>
+            <th>Status</th>
+            <th>Reason</th>
+            <th>Threat Level</th>
+          </tr></thead>
+          <tbody id="loginsContainer"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <footer>CyberSecure Enterprise v3.0 — Real-time Threat Intelligence & User Control | Built for Security Teams</footer>
+</div>
+
+<script>
+const CONFIG = {
+  API_URL: window.location.origin,
+  REFRESH_INTERVAL: 5000,
+};
+
+let socket;
+
+function initTabs() {
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+      tab.classList.add("active");
+      const panel = document.getElementById("panel-" + tab.getAttribute("data-panel"));
+      if (panel) panel.classList.add("active");
+      loadPanelData(tab.getAttribute("data-panel"));
+    });
+  });
+}
+
+async function loadOverview() {
+  try {
+    const res = await fetch(`${CONFIG.API_URL}/api/admin/overview`);
+    const data = await res.json();
+    
+    document.getElementById("stat-users").textContent = data.total_users;
+    document.getElementById("stat-sessions").textContent = data.active_sessions;
+    document.getElementById("stat-scans").textContent = data.total_scans;
+    document.getElementById("stat-failures").textContent = data.failed_logins_24h;
+    document.getElementById("stat-critical").textContent = data.critical_threats;
+    document.getElementById("stat-blocked-ips").textContent = data.malicious_ips;
+    
+    document.getElementById("threatCount").textContent = data.critical_threats;
+    document.getElementById("sessionCount").textContent = data.active_sessions;
+    document.getElementById("userCount").textContent = data.total_users;
+  } catch (e) {
+    console.error("Error loading overview:", e);
+  }
+}
+
+async function loadThreats() {
+  try {
+    const res = await fetch(`${CONFIG.API_URL}/api/admin/threats?limit=100`);
+    const data = await res.json();
+    
+    const container = document.getElementById("threatsContainer");
+    if (!data.threats || data.threats.length === 0) {
+      container.innerHTML = '<div style="text-align:center;color:var(--text-dim);padding:20px;">No threats detected</div>';
+      return;
+    }
+    
+    container.innerHTML = data.threats.map(t => `
+      <div class="threat-item ${t.severity === 'critical' ? 'critical' : ''}">
+        <div class="threat-header">
+          <div style="display:flex;gap:10px;align-items:center;">
+            <span class="badge ${t.severity}">${t.severity}</span>
+            <span class="threat-type">${t.threat_type}</span>
+          </div>
+          <span class="threat-time">${new Date(t.timestamp).toLocaleString()}</span>
+        </div>
+        <div class="threat-desc">${t.description}</div>
+        <div class="threat-detail">
+          Resource: <code>${t.affected_resource}</code> | IP: <code>${t.ip_address || 'N/A'}</code>
+        </div>
+      </div>
+    `).join("");
+  } catch (e) {
+    console.error("Error loading threats:", e);
+  }
+}
+
+async function loadUsers() {
+  try {
+    const res = await fetch(`${CONFIG.API_URL}/api/admin/users`);
+    const data = await res.json();
+    
+    const container = document.getElementById("usersContainer");
+    if (!data.users || data.users.length === 0) {
+      container.innerHTML = '<div style="text-align:center;color:var(--text-dim);padding:20px;">No users found</div>';
+      return;
+    }
+    
+    container.innerHTML = data.users.map(u => `
+      <div class="user-row">
+        <div class="user-info">
+          <div class="user-email">${u.email}</div>
+          <div class="user-meta">
+            ${u.company_name ? u.company_name + ' · ' : ''}${u.plan.toUpperCase()}
+            ${u.is_admin ? ' · ADMIN' : ''}
+          </div>
+        </div>
+        <div class="user-actions">
+          <span class="badge ${u.is_active ? 'success' : 'danger'}">${u.is_active ? 'ACTIVE' : 'INACTIVE'}</span>
+          <button class="action-btn danger" onclick="toggleUser(${u.id})">
+            ${u.is_active ? 'DISABLE' : 'ENABLE'}
+          </button>
+        </div>
+      </div>
+    `).join("");
+  } catch (e) {
+    console.error("Error loading users:", e);
+  }
+}
+
+async function loadSessions() {
+  try {
+    const res = await fetch(`${CONFIG.API_URL}/api/admin/sessions`);
+    const data = await res.json();
+    
+    const container = document.getElementById("sessionsContainer");
+    if (!data.sessions || data.sessions.length === 0) {
+      container.innerHTML = '<div style="text-align:center;color:var(--text-dim);padding:20px;">No active sessions</div>';
+      return;
+    }
+    
+    const html = `
+      <div class="table-responsive">
+        <table>
+          <thead><tr>
+            <th>Session ID</th>
+            <th>User ID</th>
+            <th>IP Address</th>
+            <th>Created</th>
+            <th>Last Activity</th>
+            <th>Action</th>
+          </tr></thead>
+          <tbody>
+            ${data.sessions.map(s => `
+              <tr>
+                <td><code>${s.id}</code></td>
+                <td>${s.user_id}</td>
+                <td>${s.ip_address}</td>
+                <td>${new Date(s.created_at).toLocaleString()}</td>
+                <td>${new Date(s.last_activity).toLocaleString()}</td>
+                <td><button class="action-btn danger" onclick="terminateSession(${s.id})">TERMINATE</button></td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+    container.innerHTML = html;
+  } catch (e) {
+    console.error("Error loading sessions:", e);
+  }
+}
+
+async function loadMaliciousIps() {
+  try {
+    const res = await fetch(`${CONFIG.API_URL}/api/admin/malicious-ips`);
+    const data = await res.json();
+    
+    const container = document.getElementById("ipsContainer");
+    if (!data.ips || data.ips.length === 0) {
+      container.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);">No malicious IPs blocked</td></tr>';
+      return;
+    }
+    
+    container.innerHTML = data.ips.map(ip => `
+      <tr>
+        <td><code>${ip.ip_address}</code></td>
+        <td><span class="badge ${ip.threat_level}">${ip.threat_level}</span></td>
+        <td>${new Date(ip.first_detected).toLocaleString()}</td>
+        <td>${new Date(ip.last_seen).toLocaleString()}</td>
+        <td>${ip.reason}</td>
+        <td>${ip.blocked ? `<button class="action-btn" onclick="unblockIp(${ip.id})">UNBLOCK</button>` : '<span class="badge success">UNBLOCKED</span>'}</td>
+      </tr>
+    `).join("");
+  } catch (e) {
+    console.error("Error loading IPs:", e);
+  }
+}
+
+async function loadLogins() {
+  try {
+    const res = await fetch(`${CONFIG.API_URL}/api/admin/logins?limit=100`);
+    const data = await res.json();
+    
+    const container = document.getElementById("loginsContainer");
+    if (!data.logins || data.logins.length === 0) {
+      container.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);">No login events</td></tr>';
+      return;
+    }
+    
+    container.innerHTML = data.logins.map(e => `
+      <tr>
+        <td>${new Date(e.timestamp).toLocaleString()}</td>
+        <td>${e.email}</td>
+        <td><code>${e.ip_address}</code></td>
+        <td><span class="badge ${e.success ? 'success' : 'danger'}">${e.success ? 'SUCCESS' : 'FAILED'}</span></td>
+        <td>${e.reason}</td>
+        <td><span class="badge ${e.threat_level}">${e.threat_level}</span></td>
+      </tr>
+    `).join("");
+  } catch (e) {
+    console.error("Error loading logins:", e);
+  }
+}
+
+async function loadStats() {
+  try {
+    const res = await fetch(`${CONFIG.API_URL}/api/admin/stats`);
+    const data = await res.json();
+    
+    const total = data.total_scans || 1;
+    const html = Object.entries(data.scans_by_type || {}).map(([type, count]) => `
+      <tr>
+        <td>${type.toUpperCase()}</td>
+        <td>${count}</td>
+        <td>${((count / total) * 100).toFixed(1)}%</td>
+      </tr>
+    `).join("");
+    
+    document.getElementById("scanStats").innerHTML = html || '<tr><td colspan="3">No scan data</td></tr>';
+  } catch (e) {
+    console.error("Error loading stats:", e);
+  }
+}
+
+async function loadPanelData(panel) {
+  if (panel === "overview") {
+    loadOverview();
+    loadStats();
+  } else if (panel === "threats") {
+    loadThreats();
+  } else if (panel === "users") {
+    loadUsers();
+  } else if (panel === "sessions") {
+    loadSessions();
+  } else if (panel === "ips") {
+    loadMaliciousIps();
+  } else if (panel === "logins") {
+    loadLogins();
+  }
+}
+
+async function toggleUser(userId) {
+  try {
+    const res = await fetch(`${CONFIG.API_URL}/api/admin/users/${userId}/toggle`, {
+      method: "POST"
+    });
+    const data = await res.json();
+    if (res.ok) {
+      loadUsers();
+      loadOverview();
+    } else {
+      alert("Error: " + data.error);
+    }
+  } catch (e) {
+    console.error("Error toggling user:", e);
+  }
+}
+
+async function terminateSession(sessionId) {
+  if (!confirm("Terminate this session?")) return;
+  try {
+    const res = await fetch(`${CONFIG.API_URL}/api/admin/sessions/${sessionId}/terminate`, {
+      method: "POST"
+    });
+    if (res.ok) {
+      loadSessions();
+      loadOverview();
+    } else {
+      alert("Error terminating session");
+    }
+  } catch (e) {
+    console.error("Error:", e);
+  }
+}
+
+async function addMaliciousIp() {
+  const ip = document.getElementById("newIpInput").value.trim();
+  if (!ip) {
+    alert("Please enter an IP address");
+    return;
+  }
+  
+  try {
+    const res = await fetch(`${CONFIG.API_URL}/api/admin/malicious-ips`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ip_address: ip,
+        threat_level: "high",
+        reason: "Manually blocked by admin"
+      })
+    });
+    
+    if (res.ok) {
+      document.getElementById("newIpInput").value = "";
+      loadMaliciousIps();
+      loadOverview();
+      alert("IP blocked successfully");
+    } else {
+      alert("Error blocking IP");
+    }
+  } catch (e) {
+    console.error("Error:", e);
+  }
+}
+
+async function unblockIp(ipId) {
+  if (!confirm("Unblock this IP?")) return;
+  try {
+    const res = await fetch(`${CONFIG.API_URL}/api/admin/malicious-ips/${ipId}/unblock`, { method: "POST" });
+    if (res.ok) {
+      loadMaliciousIps();
+      loadOverview();
+    } else {
+      alert("Error unblocking IP");
+    }
+  } catch (e) {
+    console.error("Error:", e);
+  }
+}
+
+function initSocket() {
+  socket = io();
+  
+  socket.on("connect", () => {
+    console.log("Connected to real-time updates");
+    socket.emit("subscribe_alerts");
+  });
+  
+  socket.on("threat_alert", (alert) => {
+    console.log("New threat alert:", alert);
+    loadThreats();
+    loadOverview();
+    
+    // Show notification
+    if (Notification.permission === "granted") {
+      new Notification("Security Alert", {
+        body: `${alert.severity.toUpperCase()}: ${alert.description}`,
+        tag: "threat-alert"
+      });
+    }
+  });
+  
+  socket.on("user_login", (data) => {
+    loadSessions();
+    loadLogins();
+  });
+  
+  socket.on("real_time_scan", (data) => {
+    loadOverview();
+  });
+}
+
+// Request notification permission
+if ("Notification" in window && Notification.permission === "default") {
+  Notification.requestPermission();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  initTabs();
+  loadPanelData("overview");
+  initSocket();
+
+  document.getElementById("logoutBtn").addEventListener("click", async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/login";
+  });
+  
+  // Auto-refresh every 5 seconds
+  setInterval(() => {
+    if (document.querySelector(".tab.active")) {
+      const activePanel = document.querySelector(".tab.active").getAttribute("data-panel");
+      loadPanelData(activePanel);
+    }
+  }, CONFIG.REFRESH_INTERVAL);
+});
+</script>
+</body>
+</html>

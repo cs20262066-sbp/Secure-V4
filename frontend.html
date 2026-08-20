@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — CyberSecure</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<style>
+  :root{
+    --bg: #0E1412; --panel: #151D1A; --panel-raised: #1B2521; --border: #263831;
+    --text: #DCE6E1; --text-dim: #8AA098; --safe: #3ED598; --warn: #E8A93D; --danger: #E5544D;
+    --accent: #4FD1C5; --mono: 'IBM Plex Mono', monospace; --display: 'Space Grotesk', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:var(--display); min-height:100vh;}
+  .shell{ max-width:1100px; margin:0 auto; padding:24px 20px 80px; }
+  header{ display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border);
+    padding-bottom:16px; margin-bottom:24px; flex-wrap:wrap; gap:10px;}
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand-mark{ width:34px; height:34px; border:1.5px solid var(--accent); border-radius:8px; display:flex; align-items:center; justify-content:center;}
+  .brand-mark span{ width:8px; height:8px; border-radius:50%; background:var(--safe); box-shadow:0 0 8px var(--safe);}
+  h1{ font-size:1.15rem; margin:0; }
+  .user-bar{ font-family:var(--mono); font-size:.78rem; color:var(--text-dim); display:flex; align-items:center; gap:14px;}
+  .user-bar a{ color:var(--accent); text-decoration:none; }
+  .tabs{ display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
+  .tab{ font-family:var(--mono); font-size:.8rem; background:var(--panel); border:1px solid var(--border);
+    color:var(--text-dim); padding:9px 16px; border-radius:6px; cursor:pointer; }
+  .tab.active{ color:var(--accent); border-color:var(--accent); }
+  .panel{ display:none; }
+  .panel.active{ display:block; }
+  .card{ background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:22px; margin-bottom:18px;}
+  .card h2{ font-size:1rem; margin:0 0 4px; }
+  .card .sub{ color:var(--text-dim); font-size:.82rem; margin:0 0 16px; }
+  input, textarea{ width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text);
+    font-family:var(--mono); font-size:.88rem; padding:10px 12px; border-radius:6px; }
+  textarea{ min-height:100px; resize:vertical; }
+  .btn{ font-family:var(--mono); font-size:.82rem; background:var(--accent); color:#0A1614; border:none;
+    font-weight:600; padding:10px 18px; border-radius:6px; cursor:pointer; margin-top:12px; }
+  .btn:disabled{ opacity:.55; cursor:progress; }
+  .btn.secondary{ background:var(--panel-raised); color:var(--text); border:1px solid var(--border); }
+  .result{ margin-top:16px; font-family:var(--mono); font-size:.83rem; }
+  .score-row{ display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+  .score{ font-size:1.6rem; font-weight:700; }
+  .badge{ font-family:var(--mono); font-size:.7rem; padding:3px 9px; border-radius:20px; text-transform:uppercase; }
+  .badge.low, .badge.not_detected, .badge.not_applicable{ background:rgba(62,213,152,.15); color:var(--safe); }
+  .badge.medium, .badge.needs_review{ background:rgba(232,169,61,.15); color:var(--warn); }
+  .badge.high, .badge.critical, .badge.possible_exposure, .badge.vulnerable{ background:rgba(229,84,77,.15); color:var(--danger); }
+  .finding{ border-top:1px solid var(--border); padding:10px 0; }
+  .finding .detail{ color:var(--text); }
+  .finding .remediation{ color:var(--text-dim); font-size:.78rem; margin-top:3px; }
+  .note{ font-size:.78rem; color:var(--text-dim); margin-top:14px; line-height:1.5; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div class="brand">
+      <div class="brand-mark"><span></span></div>
+      <h1>CyberSecure</h1>
+    </div>
+    <div class="user-bar">
+      <span id="userEmail"></span>
+      <a href="/command-center">Command Center</a>
+      <a href="/admin" id="adminLink" style="display:none;">Admin panel</a>
+      <a href="#" id="logoutLink">Log out</a>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" data-panel="website">Website scan</div>
+    <div class="tab" data-panel="url">URL / phishing check</div>
+    <div class="tab" data-panel="email">Email phishing check</div>
+    <div class="tab" data-panel="dns">DNS / email hygiene</div>
+    <div class="tab" data-panel="owned">Active scan (owned app)</div>
+  </div>
+
+  <div class="panel active" id="panel-website">
+    <div class="card">
+      <h2>Website security scan</h2>
+      <p class="sub">Passive checks — HTTPS, security headers, cookie flags, outdated banners. Safe to run against any public site.</p>
+      <input type="url" id="websiteUrl" placeholder="https://example.com">
+      <button class="btn" onclick="runScan('website')">Scan</button>
+      <div class="result" id="result-website"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-url">
+    <div class="card">
+      <h2>URL / phishing check</h2>
+      <p class="sub">Flags URL shorteners, IP-literal links, and spoofing patterns.</p>
+      <input type="url" id="urlInput" placeholder="https://suspicious-link.example">
+      <button class="btn" onclick="runScan('url')">Check</button>
+      <div class="result" id="result-url"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-email">
+    <div class="card">
+      <h2>Email phishing check</h2>
+      <p class="sub">Paste email text to check for phishing language and embedded links.</p>
+      <textarea id="emailText" placeholder="Paste email content here..."></textarea>
+      <button class="btn" onclick="runScan('email')">Check</button>
+      <div class="result" id="result-email"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-dns">
+    <div class="card">
+      <h2>DNS / email hygiene</h2>
+      <p class="sub">Checks SPF, DKIM, and DMARC enforcement.</p>
+      <input type="text" id="dnsDomain" placeholder="example.com">
+      <button class="btn" onclick="runScan('dns')">Check</button>
+      <div class="result" id="result-dns"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-owned">
+    <div class="card">
+      <h2>Active vulnerability scan</h2>
+      <p class="sub">Sends benign XSS/SQLi test probes. Restricted server-side to the domain you've registered as your own — running it against any other URL returns an error, by design.</p>
+      <input type="url" id="ownedUrl" placeholder="https://your-verified-domain.com">
+      <button class="btn" onclick="runScan('owned')">Run active scan</button>
+      <div class="result" id="result-owned"></div>
+      <div class="note">Only run active scans against applications you own or have explicit written authorization to test. Unauthorized active testing of third-party systems may violate computer-misuse laws.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const ENDPOINTS = {
+  website: { url: '/api/scan-website', field: 'websiteUrl', body: u => ({ url: u }) },
+  url: { url: '/api/scan-url', field: 'urlInput', body: u => ({ url: u }) },
+  email: { url: '/api/scan-email', field: 'emailText', body: t => ({ text: t }) },
+  dns: { url: '/api/scan-dns', field: 'dnsDomain', body: d => ({ domain: d }) },
+  owned: { url: '/api/scan-owned-app', field: 'ownedUrl', body: u => ({ url: u }) },
+};
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+  });
+});
+
+function badge(status, label) {
+  return `<span class="badge ${status}">${label || status}</span>`;
+}
+
+function renderFindings(findings) {
+  if (!findings || findings.length === 0) return '<div class="note">No findings.</div>';
+  return findings.map(f => `
+    <div class="finding">
+      <div class="detail">${badge(f.status || (f.weight > 0 ? 'high' : 'low'))} ${f.name || f.detail}</div>
+      ${f.detail && f.name ? `<div class="remediation">${f.detail}</div>` : ''}
+      ${f.remediation && f.remediation !== 'N/A' ? `<div class="remediation">Fix: ${f.remediation}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+async function runScan(kind) {
+  const cfg = ENDPOINTS[kind];
+  const value = document.getElementById(cfg.field).value.trim();
+  const resultEl = document.getElementById('result-' + kind);
+  if (!value) { resultEl.innerHTML = '<div class="note">Enter a value first.</div>'; return; }
+  resultEl.innerHTML = '<div class="note">Scanning…</div>';
+  try {
+    const res = await fetch(cfg.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cfg.body(value))
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      resultEl.innerHTML = `<div class="note" style="color:var(--danger)">${data.error || 'Scan failed'}</div>`;
+      return;
+    }
+    let html = '';
+    if (typeof data.score === 'number') {
+      html += `<div class="score-row"><div class="score">${data.score}</div>${badge(data.risk)}</div>`;
+    }
+    if (data.max_cvss) {
+      html += `<div class="note">Max CVSS: ${data.max_cvss}</div>`;
+    }
+    html += renderFindings(data.findings || data.vulnerabilities);
+    resultEl.innerHTML = html;
+  } catch (e) {
+    resultEl.innerHTML = '<div class="note" style="color:var(--danger)">Network error — please try again.</div>';
+  }
+}
+
+async function loadMe() {
+  try {
+    const res = await fetch('/api/auth/me');
+    const data = await res.json();
+    if (!data.user) { window.location.href = '/login'; return; }
+    document.getElementById('userEmail').textContent = data.user.email;
+    if (data.user.is_admin) document.getElementById('adminLink').style.display = 'inline';
+  } catch (e) { /* stay on page */ }
+}
+
+document.getElementById('logoutLink').addEventListener('click', async (e) => {
+  e.preventDefault();
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/login';
+});
+
+loadMe();
+</script>
+</body>
+</html>
