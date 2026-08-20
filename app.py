@@ -10,13 +10,7 @@ CyberSecure Enterprise Edition v3.0
 
 import os as _os
 _GEVENT_AVAILABLE = False
-if _os.getenv('DISABLE_GEVENT', 'False').lower() != 'true':
-    try:
-        from gevent import monkey
-        monkey.patch_all()
-        _GEVENT_AVAILABLE = True
-    except ImportError:
-        pass
+# Gevent disabled - using threading mode for Python 3.14 compatibility
 
 import re
 import ssl
@@ -69,7 +63,7 @@ ALLOWED_ORIGINS = "*" if _raw_origins == "*" else [o.strip() for o in _raw_origi
 CORS(app, origins=ALLOWED_ORIGINS)
 
 
-socketio = SocketIO(app, cors_allowed_origins=ALLOWED_ORIGINS, async_mode="gevent" if _GEVENT_AVAILABLE else "threading")
+socketio = SocketIO(app, cors_allowed_origins=ALLOWED_ORIGINS, async_mode="threading")
 
 # ============================================================================
 # LOGGING SETUP
