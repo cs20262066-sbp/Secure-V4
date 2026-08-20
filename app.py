@@ -9,12 +9,12 @@ CyberSecure Enterprise Edition v3.0
 """
 
 import os as _os
-_EVENTLET_AVAILABLE = False
-if _os.getenv('DISABLE_EVENTLET', 'False').lower() != 'true':
+_GEVENT_AVAILABLE = False
+if _os.getenv('DISABLE_GEVENT', 'False').lower() != 'true':
     try:
-        import eventlet
-        eventlet.monkey_patch()
-        _EVENTLET_AVAILABLE = True
+        from gevent import monkey
+        monkey.patch_all()
+        _GEVENT_AVAILABLE = True
     except ImportError:
         pass
 
@@ -69,7 +69,7 @@ ALLOWED_ORIGINS = "*" if _raw_origins == "*" else [o.strip() for o in _raw_origi
 CORS(app, origins=ALLOWED_ORIGINS)
 
 
-socketio = SocketIO(app, cors_allowed_origins=ALLOWED_ORIGINS, async_mode="eventlet" if _EVENTLET_AVAILABLE else "threading")
+socketio = SocketIO(app, cors_allowed_origins=ALLOWED_ORIGINS, async_mode="gevent" if _GEVENT_AVAILABLE else "threading")
 
 # ============================================================================
 # LOGGING SETUP
